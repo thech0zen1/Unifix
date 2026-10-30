@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres.svjjweqbawzbkbjbwxrk:itsprajwalnayak05@aws-0-eu-west-2.pooler.supabase.com:5432/postgres"
+}
+
+model Campus {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

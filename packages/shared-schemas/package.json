@@ -1,0 +1,24 @@
+{
+  "name": "@unifix/shared-schemas",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules"
+  },
+  "dependencies": {
+    "zod": "^3.22.4",
+    "@unifix/shared-types": "file:../shared-types"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "private"
+  }
+}
