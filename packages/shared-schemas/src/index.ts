@@ -2,16 +2,12 @@
 // These schemas validate API requests and responses
 
 import { z } from 'zod';
-// These are the base types shared across the entire application
 
-type BaseEntity = {
-  id: string;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-};
-
-type Campus = Campus & BaseEntity;
-
+export const baseSchema = z.object({
+  id: z.string(),
+  createdAt: z.union([z.date(), z.string()]),
+  updatedAt: z.union([z.date(), z.string()]),
+});
 
 // ========== CAMPUS SCHEMAS ==========
 
@@ -23,7 +19,7 @@ export const createCampusSchema = z.object({
   address: z.string().optional(),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
-  timezone: z.string().optional(),
+  timezone: z.string().default('UTC').optional(),
 });
 
 /** Schema for updating campus */
@@ -41,10 +37,77 @@ export const campusSchema = baseSchema.extend({
   name: z.string(),
   code: z.string(),
   isActive: z.boolean(),
-  address: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  timezone: z.string().optional(),
+  address: z.string().nullable().optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
+  timezone: z.string().nullable().optional(),
+});
+
+// ========== AUTHORIZED IDENTITY SCHEMAS ==========
+
+export const campusMembershipRoleSchema = z.enum([
+  'REPORTER',
+  'MANAGEMENT',
+  'SUPERMANAGEMENT',
+]);
+
+export const createAuthorizedIdentitySchema = z.object({
+  campusId: z.string().uuid(),
+  email: z.string().email().optional(),
+  phone: z.string().optional(),
+  displayName: z.string().min(2).max(100),
+  externalId: z.string().optional(),
+  role: campusMembershipRoleSchema.default('REPORTER'),
+  department: z.string().optional(),
+  isActive: z.boolean().default(true),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+export const authorizedIdentitySchema = baseSchema.extend({
+  campusId: z.string(),
+  email: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  displayName: z.string(),
+  externalId: z.string().nullable().optional(),
+  role: campusMembershipRoleSchema,
+  department: z.string().nullable().optional(),
+  isActive: z.boolean(),
+  metadata: z.record(z.unknown()).nullable().optional(),
+});
+
+// ========== DEPARTMENT & LOCATION SCHEMAS ==========
+
+export const createDepartmentSchema = z.object({
+  campusId: z.string().uuid(),
+  name: z.string().min(2).max(100),
+  code: z.string().max(20).optional(),
+  isActive: z.boolean().default(true),
+});
+
+export const createBuildingSchema = z.object({
+  campusId: z.string().uuid(),
+  name: z.string().min(2).max(100),
+  code: z.string().max(20).optional(),
+  isActive: z.boolean().default(true),
+});
+
+export const createLocationSchema = z.object({
+  campusId: z.string().uuid(),
+  buildingId: z.string().uuid().optional(),
+  name: z.string().min(2).max(100),
+  floor: z.string().optional(),
+  room: z.string().optional(),
+  description: z.string().optional(),
+  isActive: z.boolean().default(true),
+});
+
+export const createCategorySchema = z.object({
+  campusId: z.string().uuid().optional(),
+  name: z.string().min(2).max(100),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+  defaultPriority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
+  isActive: z.boolean().default(true),
 });
 
 // ========== USER SCHEMAS ==========
@@ -52,7 +115,7 @@ export const campusSchema = baseSchema.extend({
 /** Schema for creating an anonymous user */
 export const createAnonymousUserSchema = z.object({
   isAnonymous: z.literal(true),
-  phone: z.string().optional(), // Can be empty for truly anonymous
+  phone: z.string().optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   campusId: z.string().uuid(),
@@ -65,7 +128,6 @@ export const createAuthenticatedUserSchema = z.object({
   phone: z.string().optional(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  password: z.string().min(8),
   campusId: z.string().uuid(),
 });
 
@@ -78,27 +140,20 @@ export const updateUserSchema = z.object({
 
 /** User response schema */
 export const userSchema = baseSchema.extend({
-  email: z.string().email().optional(),
-  phone: z.string().optional(),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-  avatarUrl: z.string().url().optional(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  firstName: z.string().nullable().optional(),
+  lastName: z.string().nullable().optional(),
+  avatarUrl: z.string().url().nullable().optional(),
   isActive: z.boolean(),
   isAnonymous: z.boolean(),
-  emailVerified: z.coerce.date().optional(),
-  phoneVerified: z.coerce.date().optional(),
-  lastLogin: z.coerce.date().optional(),
+  emailVerified: z.union([z.date(), z.string()]).nullable().optional(),
+  phoneVerified: z.union([z.date(), z.string()]).nullable().optional(),
+  lastLogin: z.union([z.date(), z.string()]).nullable().optional(),
 });
 
 // ========== CAMPUS MEMBERSHIP SCHEMAS ==========
 
-export const campusMembershipRoleSchema = z.enum([
-  'REPORTER',
-  'MANAGEMENT',
-  'SUPERMANAGEMENT',
-]);
-
-/** Schema for adding user to campus */
 export const createCampusMembershipSchema = z.object({
   userId: z.string().uuid(),
   campusId: z.string().uuid(),
@@ -106,7 +161,6 @@ export const createCampusMembershipSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-/** Campus membership response schema */
 export const campusMembershipSchema = baseSchema.extend({
   userId: z.string(),
   campusId: z.string(),
@@ -116,16 +170,19 @@ export const campusMembershipSchema = baseSchema.extend({
 
 // ========== TICKET SCHEMAS ==========
 
-/** Ticket status enum */
 export const ticketStatusSchema = z.enum([
-  'NEW',
+  'OPEN',
   'ACKNOWLEDGED',
+  'UNDER_REVIEW',
+  'ASSIGNED',
   'IN_PROGRESS',
+  'WAITING',
   'RESOLVED',
   'CLOSED',
+  'REJECTED',
+  'DUPLICATE',
 ]);
 
-/** Progress stage enum */
 export const progressStageSchema = z.enum([
   'REPORTED',
   'ACKNOWLEDGED',
@@ -134,46 +191,50 @@ export const progressStageSchema = z.enum([
   'COMPLETED',
 ]);
 
-/** Ticket priority enum */
-export const ticketPrioritySchema = z.enum([
-  'LOW',
-  'MEDIUM',
-  'HIGH',
-  'CRITICAL',
-]);
+export const ticketPrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+export const ticketSeveritySchema = z.enum(['MINOR', 'MODERATE', 'MAJOR', 'CRITICAL']);
+export const ticketImpactSchema = z.enum(['INDIVIDUAL', 'GROUP', 'BUILDING', 'CAMPUS']);
+export const ticketUrgencySchema = z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']);
+export const ticketTypeSchema = z.enum(['ISSUE', 'SERVICE_REQUEST']);
 
-/** Schema for creating a new ticket */
+/** Schema for creating a new ticket (Report) */
 export const createTicketSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().min(10).max(5000),
   campusId: z.string().uuid(),
-  location: z.string().optional(),
-  category: z.string().optional(),
+  locationId: z.string().uuid().optional(),
+  locationText: z.string().optional(),
+  categoryId: z.string().uuid().optional(),
+  departmentId: z.string().uuid().optional(),
+  ticketType: ticketTypeSchema.default('ISSUE'),
+  severity: ticketSeveritySchema.default('MODERATE'),
+  impact: ticketImpactSchema.default('INDIVIDUAL'),
+  urgency: ticketUrgencySchema.default('NORMAL'),
   isCritical: z.boolean().default(false),
-  isAnonymous: z.boolean(),
-  attachments: z.array(
-    z.object({
-      filename: z.string(),
-      filepath: z.string(),
-      mimeType: z.string(),
-      size: z.number(),
-    })
-  ).optional(),
-});
-
-/** Schema for creating a manual ticket (management use) */
-export const createManualTicketSchema = createTicketSchema.extend({
-  reporterId: z.string().uuid(),
-  phone: z.string().optional(),
-  priority: ticketPrioritySchema.default('MEDIUM'),
+  isAnonymous: z.boolean().default(false),
+  attachments: z
+    .array(
+      z.object({
+        filename: z.string(),
+        filepath: z.string(),
+        mimeType: z.string(),
+        size: z.number(),
+      })
+    )
+    .optional(),
 });
 
 /** Schema for updating ticket */
 export const updateTicketSchema = z.object({
   title: z.string().min(3).max(200).optional(),
   description: z.string().min(10).max(5000).optional(),
-  location: z.string().optional(),
-  category: z.string().optional(),
+  locationText: z.string().optional(),
+  categoryId: z.string().uuid().optional(),
+  departmentId: z.string().uuid().optional(),
+  locationId: z.string().uuid().optional(),
+  severity: ticketSeveritySchema.optional(),
+  impact: ticketImpactSchema.optional(),
+  urgency: ticketUrgencySchema.optional(),
   priority: ticketPrioritySchema.optional(),
   status: ticketStatusSchema.optional(),
   isCritical: z.boolean().optional(),
@@ -181,68 +242,103 @@ export const updateTicketSchema = z.object({
 
 /** Schema for acknowledging a ticket */
 export const acknowledgeTicketSchema = z.object({
-  status: z.literal('ACKNOWLEDGED'),
-  priority: ticketPrioritySchema.optional(),
   notes: z.string().optional(),
+  priority: ticketPrioritySchema.optional(),
 });
 
 /** Schema for assigning a ticket */
 export const assignTicketSchema = z.object({
-  assigneeId: z.string().uuid(),
-  status: z.literal('IN_PROGRESS'),
+  assigneeId: z.string().uuid().optional(),
+  departmentId: z.string().uuid().optional(),
   notes: z.string().optional(),
+});
+
+/** Schema for recording progress */
+export const recordProgressSchema = z.object({
+  eventType: z.enum([
+    'ACKNOWLEDGEMENT',
+    'ASSIGNMENT',
+    'INVESTIGATION_UPDATE',
+    'MAINTENANCE_ACTION',
+    'WAITING_STATE',
+    'RESOLUTION_ATTEMPT',
+  ]),
+  title: z.string().min(3).max(100),
+  details: z.string().min(5).max(2000),
+  resetsStageTimer: z.boolean().default(false),
+});
+
+/** Schema for overriding priority */
+export const overridePrioritySchema = z.object({
+  priority: ticketPrioritySchema,
+  reason: z.string().min(5).max(500),
+});
+
+/** Schema for marking as duplicate */
+export const markDuplicateSchema = z.object({
+  canonicalTicketId: z.string().uuid(),
+  reason: z.string().optional(),
 });
 
 /** Schema for resolving a ticket */
 export const resolveTicketSchema = z.object({
-  status: z.literal('RESOLVED'),
-  resolutionNotes: z.string().min(10),
+  resolutionSummary: z.string().min(10).max(2000),
 });
 
 /** Schema for closing a ticket */
 export const closeTicketSchema = z.object({
-  status: z.literal('CLOSED'),
-  closureNotes: z.string().min(10),
+  notes: z.string().optional(),
 });
 
 /** Schema for reopening a ticket */
 export const reopenTicketSchema = z.object({
-  status: z.literal('NEW'),
-  reason: z.string().min(10),
+  reason: z.string().min(10).max(1000),
 });
 
 /** Ticket response schema */
 export const ticketSchema = baseSchema.extend({
+  campusId: z.string(),
+  reporterId: z.string().nullable().optional(),
+  assigneeId: z.string().nullable().optional(),
+  departmentId: z.string().nullable().optional(),
+  categoryId: z.string().nullable().optional(),
+  locationId: z.string().nullable().optional(),
+  ticketType: ticketTypeSchema,
   title: z.string(),
   description: z.string(),
-  status: ticketStatusSchema,
+  locationText: z.string().nullable().optional(),
+  severity: ticketSeveritySchema,
+  impact: ticketImpactSchema,
+  urgency: ticketUrgencySchema,
+  suggestedPriority: ticketPrioritySchema,
   priority: ticketPrioritySchema,
-  campusId: z.string(),
-  reporterId: z.string().optional(),
-  assigneeId: z.string().optional(),
-  location: z.string().optional(),
-  category: z.string().optional(),
+  status: ticketStatusSchema,
   isCritical: z.boolean(),
   isAnonymous: z.boolean(),
+  duplicateOfId: z.string().nullable().optional(),
   escalationCount: z.number(),
   currentStage: progressStageSchema,
-  stageStartTime: z.coerce.date(),
+  stageStartTime: z.union([z.date(), z.string()]),
   stageDuration: z.number(),
-  closedAt: z.coerce.date().optional(),
-  resolvedAt: z.coerce.date().optional(),
+  lastProgressAt: z.union([z.date(), z.string()]),
+  acknowledgedAt: z.union([z.date(), z.string()]).nullable().optional(),
+  startedAt: z.union([z.date(), z.string()]).nullable().optional(),
+  waitingReason: z.string().nullable().optional(),
+  resolvedAt: z.union([z.date(), z.string()]).nullable().optional(),
+  resolutionSummary: z.string().nullable().optional(),
+  closedAt: z.union([z.date(), z.string()]).nullable().optional(),
+  reopenCount: z.number(),
+  reopenedAt: z.union([z.date(), z.string()]).nullable().optional(),
+  reopenReason: z.string().nullable().optional(),
 });
 
 // ========== COMMENT SCHEMAS ==========
 
-/** Schema for creating a comment */
 export const createCommentSchema = z.object({
-  ticketId: z.string().uuid(),
   content: z.string().min(1).max(2000),
   isInternal: z.boolean().default(false),
-  authorName: z.string().min(1),
 });
 
-/** Comment response schema */
 export const commentSchema = baseSchema.extend({
   ticketId: z.string(),
   userId: z.string(),
@@ -253,16 +349,13 @@ export const commentSchema = baseSchema.extend({
 
 // ========== ATTACHMENT SCHEMAS ==========
 
-/** Schema for uploading attachment */
 export const uploadAttachmentSchema = z.object({
-  ticketId: z.string().uuid(),
   filename: z.string(),
   filepath: z.string(),
   mimeType: z.string(),
   size: z.number().positive(),
 });
 
-/** Attachment response schema */
 export const attachmentSchema = baseSchema.extend({
   ticketId: z.string(),
   userId: z.string(),
@@ -276,239 +369,129 @@ export const attachmentSchema = baseSchema.extend({
 
 // ========== ENDORSEMENT SCHEMAS ==========
 
-/** Schema for endorsing a duplicate ticket */
-export const createEndorsementSchema = z.object({
-  ticketId: z.string().uuid(),
-  relatedTicketId: z.string().uuid(),
-});
-
-/** Endorsement response schema */
-export const endorsementSchema = baseSchema.extend({
+export const endorsementSchema = z.object({
+  id: z.string(),
   ticketId: z.string(),
   endorserId: z.string(),
-  relatedTicketId: z.string(),
-  isConfirmed: z.boolean(),
+  createdAt: z.union([z.date(), z.string()]),
 });
 
-// ========== STATUS HISTORY SCHEMAS ==========
+// ========== PROGRESS EVENT SCHEMAS ==========
 
-/** Schema for status change */
-export const createStatusHistorySchema = z.object({
-  ticketId: z.string().uuid(),
-  status: ticketStatusSchema,
-  priority: ticketPrioritySchema,
-  changedById: z.string().uuid(),
-  previousStatus: ticketStatusSchema.optional(),
-  previousPriority: ticketPrioritySchema.optional(),
-  notes: z.string().optional(),
-});
-
-/** Status history response schema */
-export const statusHistorySchema = baseSchema.extend({
+export const progressEventSchema = z.object({
+  id: z.string(),
   ticketId: z.string(),
-  status: ticketStatusSchema,
-  priority: ticketPrioritySchema,
-  changedById: z.string(),
-  previousStatus: ticketStatusSchema.optional(),
-  previousPriority: ticketPrioritySchema.optional(),
-  notes: z.string().optional(),
-});
-
-// ========== ESCALATION SCHEMAS ==========
-
-/** Schema for escalation event */
-export const createEscalationEventSchema = z.object({
-  ticketId: z.string().uuid(),
-  stage: progressStageSchema,
-  previousStage: progressStageSchema,
-  manualOverride: z.boolean().default(false),
-  notifiedIds: z.array(z.string().uuid()).optional(),
-});
-
-/** Escalation event response schema */
-export const escalationEventSchema = baseSchema.extend({
-  ticketId: z.string(),
-  stage: progressStageSchema,
-  previousStage: progressStageSchema,
-  triggeredAt: z.coerce.date(),
-  resolvedAt: z.coerce.date().optional(),
-  duration: z.number(),
-  manualOverride: z.boolean(),
-  notifiedIds: z.array(z.string()).optional(),
+  eventType: z.string(),
+  title: z.string(),
+  details: z.string(),
+  actorId: z.string(),
+  resetsStageTimer: z.boolean(),
+  createdAt: z.union([z.date(), z.string()]),
 });
 
 // ========== NOTIFICATION SCHEMAS ==========
 
-/** Notification type enum */
 export const notificationTypeSchema = z.enum([
   'TICKET_CREATED',
+  'TICKET_ACKNOWLEDGED',
   'TICKET_ASSIGNED',
   'TICKET_STATUS_CHANGE',
+  'TICKET_PROGRESS_UPDATED',
   'TICKET_ESCALATED',
   'TICKET_RESOLVED',
   'TICKET_CLOSED',
+  'TICKET_REOPENED',
   'COMMENT_ADDED',
+  'STAGE_OVERDUE',
   'SYSTEM_ALERT',
 ]);
 
-/** Schema for creating notification */
-export const createNotificationSchema = z.object({
-  userId: z.string().uuid(),
-  title: z.string().min(1).max(100),
-  message: z.string().min(1).max(500),
-  type: notificationTypeSchema,
-  relatedTicketId: z.string().uuid().optional(),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-/** Notification response schema */
 export const notificationSchema = baseSchema.extend({
   userId: z.string(),
   title: z.string(),
   message: z.string(),
   type: notificationTypeSchema,
   isRead: z.boolean(),
-  metadata: z.record(z.unknown()).optional(),
-  relatedTicketId: z.string().optional(),
-});
-
-// ========== AI ANALYSIS SCHEMAS ==========
-
-export const aiModelSchema = z.enum([
-  'gpt-4',
-  'gpt-4-turbo',
-  'gpt-3.5-turbo',
-  'mock',
-  'custom',
-]);
-
-/** Schema for AI analysis */
-export const createAIAnalysisSchema = z.object({
-  ticketId: z.string().uuid(),
-  suggestedTitle: z.string().optional(),
-  suggestedCategory: z.string().optional(),
-  suggestedPriority: ticketPrioritySchema.optional(),
-  suggestedLocation: z.string().optional(),
-  similarTickets: z.array(z.string().uuid()).optional(),
-  confidence: z.number().min(0).max(1).optional(),
-  modelUsed: aiModelSchema,
-  tokensUsed: z.number().optional(),
-  durationMs: z.number().optional(),
-  analysisText: z.string().optional(),
-});
-
-/** AI analysis response schema */
-export const aiAnalysisSchema = baseSchema.extend({
-  ticketId: z.string(),
-  suggestedTitle: z.string().optional(),
-  suggestedCategory: z.string().optional(),
-  suggestedPriority: ticketPrioritySchema.optional(),
-  suggestedLocation: z.string().optional(),
-  similarTickets: z.array(z.string()).optional(),
-  confidence: z.number().optional(),
-  modelUsed: aiModelSchema,
-  tokensUsed: z.number().optional(),
-  durationMs: z.number().optional(),
-  analysisText: z.string().optional(),
+  readAt: z.union([z.date(), z.string()]).nullable().optional(),
+  metadata: z.record(z.unknown()).nullable().optional(),
+  relatedTicketId: z.string().nullable().optional(),
 });
 
 // ========== AUTHENTICATION SCHEMAS ==========
 
-/** OTP verification request */
+export const requestOTPSchema = z.object({
+  identifier: z.string().min(3), // phone or email
+  campusId: z.string().uuid(),
+  isAnonymous: z.boolean().default(false),
+});
+
 export const verifyOTPSchema = z.object({
-  phone: z.string(),
+  identifier: z.string().min(3),
   code: z.string().length(6),
   campusId: z.string().uuid(),
-  isAnonymous: z.boolean(),
+  isAnonymous: z.boolean().default(false),
+  displayName: z.string().optional(),
 });
 
-/** Token request for login */
-export const tokenRequestSchema = z.object({
-  userId: z.string().uuid(),
-  campusIds: z.array(z.string().uuid()),
-  roles: z.array(campusMembershipRoleSchema),
-  isAnonymous: z.boolean(),
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(10),
 });
 
-// ========== API REQUEST/RESPONSE SCHEMAS ==========
+// ========== AI SCHEMAS ==========
 
-/** Base API response */
-export const apiResponseSchema = z.object({
-  data: z.record(z.unknown()).or(z.array(z.record(z.unknown()))).optional(),
-  error: z.record(z.unknown()).optional(),
-  metadata: z.object({
-    timings: z.record(z.number()).optional(),
-    pagination: z.object({
-      page: z.number(),
-      limit: z.number(),
-      total: z.number(),
-      totalPages: z.number(),
-    }).optional(),
-  }).optional(),
+export const aiParseRequestSchema = z.object({
+  campusId: z.string().uuid(),
+  text: z.string().min(5).max(3000),
 });
 
-/** API error response */
-export const apiErrorSchema = z.object({
-  error: z.string(),
-  message: z.string(),
-  code: z.string().optional(),
-  details: z.unknown().optional(),
+export const aiFollowUpRequestSchema = z.object({
+  originalText: z.string(),
+  question: z.string(),
+  answer: z.string(),
 });
 
-/** Pagination query params */
+export const aiSimilarityRequestSchema = z.object({
+  campusId: z.string().uuid(),
+  title: z.string().min(3),
+  description: z.string().min(5),
+  location: z.string().optional(),
+});
+
+// ========== PAGINATION & COMMON ==========
+
 export const paginationSchema = z.object({
-  page: z.number().min(1).default(1),
-  limit: z.number().min(1).max(100).default(20),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
 });
 
-// ========== TYPE INFERENCE ==========
+export const apiResponseSchema = z.object({
+  data: z.unknown().optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
 
-/** Type inference for all schemas */
+// ========== INFERRED TYPES ==========
+
 export type CreateCampus = z.infer<typeof createCampusSchema>;
 export type UpdateCampus = z.infer<typeof updateCampusSchema>;
 export type Campus = z.infer<typeof campusSchema>;
 
-export type CreateAnonymousUser = z.infer<typeof createAnonymousUserSchema>;
-export type CreateAuthenticatedUser = z.infer<typeof createAuthenticatedUserSchema>;
-export type UpdateUser = z.infer<typeof updateUserSchema>;
-export type User = z.infer<typeof userSchema>;
+export type CreateAuthorizedIdentity = z.infer<typeof createAuthorizedIdentitySchema>;
+export type AuthorizedIdentity = z.infer<typeof authorizedIdentitySchema>;
 
-export type CreateCampusMembership = z.infer<typeof createCampusMembershipSchema>;
-export type CampusMembership = z.infer<typeof campusMembershipSchema>;
+export type CreateDepartment = z.infer<typeof createDepartmentSchema>;
+export type CreateBuilding = z.infer<typeof createBuildingSchema>;
+export type CreateLocation = z.infer<typeof createLocationSchema>;
+export type CreateCategory = z.infer<typeof createCategorySchema>;
 
 export type CreateTicket = z.infer<typeof createTicketSchema>;
-export type CreateManualTicket = z.infer<typeof createManualTicketSchema>;
 export type UpdateTicket = z.infer<typeof updateTicketSchema>;
-export type AcknowledgeTicket = z.infer<typeof acknowledgeTicketSchema>;
-export type AssignTicket = z.infer<typeof assignTicketSchema>;
-export type ResolveTicket = z.infer<typeof resolveTicketSchema>;
-export type CloseTicket = z.infer<typeof closeTicketSchema>;
-export type ReopenTicket = z.infer<typeof reopenTicketSchema>;
 export type Ticket = z.infer<typeof ticketSchema>;
 
 export type CreateComment = z.infer<typeof createCommentSchema>;
 export type Comment = z.infer<typeof commentSchema>;
 
-export type UploadAttachment = z.infer<typeof uploadAttachmentSchema>;
-export type Attachment = z.infer<typeof attachmentSchema>;
-
-export type CreateEndorsement = z.infer<typeof createEndorsementSchema>;
-export type Endorsement = z.infer<typeof endorsementSchema>;
-
-export type CreateStatusHistory = z.infer<typeof createStatusHistorySchema>;
-export type StatusHistory = z.infer<typeof statusHistorySchema>;
-
-export type CreateEscalationEvent = z.infer<typeof createEscalationEventSchema>;
-export type EscalationEvent = z.infer<typeof escalationEventSchema>;
-
-export type CreateNotification = z.infer<typeof createNotificationSchema>;
-export type Notification = z.infer<typeof notificationSchema>;
-
-export type CreateAIAnalysis = z.infer<typeof createAIAnalysisSchema>;
-export type AIAnalysis = z.infer<typeof aiAnalysisSchema>;
-
+export type RequestOTP = z.infer<typeof requestOTPSchema>;
 export type VerifyOTP = z.infer<typeof verifyOTPSchema>;
-export type TokenRequest = z.infer<typeof tokenRequestSchema>;
-export type ApiResponse = z.infer<typeof apiResponseSchema>;
-export type ApiError = z.infer<typeof apiErrorSchema>;
-export type Pagination = z.infer<typeof paginationSchema>;
+export type RefreshToken = z.infer<typeof refreshTokenSchema>;

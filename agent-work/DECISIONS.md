@@ -98,6 +98,36 @@
 
 ### Data Model Highlights
 - Campus → User (many-to-many via CampusMembership)
+- CampusAuthorizedIdentity for onboarding pre-verification
+- RefreshSession tracking opaque hashed tokens with rotation and revocation
+- TicketProgressEvent for verified lifecycle progression and timer restarts
+
+### 6. Opaque Refresh Tokens & Database Session Tracking
+**Decision**: Use cryptographically random 64-byte opaque hex strings as refresh tokens. Store only their HMAC-SHA256 hash in a `RefreshSession` PostgreSQL table with expiration, IP, and User-Agent.
+**Rationale**:
+- Provides instant revocation capability on logout.
+- Protects against session reuse attacks: if a revoked refresh token is presented, all sessions for that user are immediately revoked.
+- Implements strict token rotation on every `/auth/refresh` call.
+
+### 7. Role-Aware Privacy Serialization
+**Decision**: Implement backend-level field serialization (`serializeTicket`) based on caller role.
+**Rationale**:
+- When a ticket is marked anonymous (`isAnonymous: true`), ordinary reporters cannot see the author's identity.
+- Campus Management and Supermanagement ARE authorized to inspect the reporter's true name, email, and phone number (per MasterPrompt Section 18).
+- Enforces privacy at the API boundary, never relying on frontend-only CSS or hidden DOM elements.
+
+### 8. Meaningful Progress vs Generic Comments
+**Decision**: Introduce `TicketProgressEvent` model distinguishing formal progress (acknowledgements, department assignments, investigation findings, maintenance actions) from generic discussion comments.
+**Rationale**:
+- Prevents indefinite escalation bypass by merely posting comments like "still checking".
+- Explicit `resetsStageTimer: boolean` controls whether the 21-day stage countdown restarts.
+
+### 9. Idempotent Escalation Background Runner
+**Decision**: Background scheduler runs `runEscalationCheck()` periodically with unique idempotency keys on notifications (`esc-${escalationId}-${managerId}`).
+**Rationale**:
+- Prevents duplicate alerts and notification spam across multiple scheduler runs.
+- Expedited 48-hour timers automatically apply to critical safety issues.
+
 - Campus → Ticket (one-to-many)
 - Ticket → Comment (one-to-many)
 - Ticket → Attachment (one-to-many)

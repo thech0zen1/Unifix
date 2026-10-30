@@ -1,10 +1,9 @@
 import express, { Application } from 'express';
-import { PrismaClient } from '@prisma/client';
 import helmet from 'helmet';
 import cors from 'cors';
 import { getConfig } from '@unifix/shared-config';
-
-const prisma = new PrismaClient();
+import logger, { requestLogger, errorLogger } from './lib/logger';
+import router from './routes';
 
 // Initialize Express application
 const app: Application = express();
@@ -12,29 +11,33 @@ const app: Application = express();
 // Load configuration
 const config = getConfig();
 
-// Middleware
+// Core Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(helmet());
 
+// Request logging
+app.use(requestLogger);
+
 // CORS configuration
-const allowedOrigins = config.webOrigin ? [config.webOrigin] : [];
+const allowedOrigins = config.webOrigin ? [config.webOrigin] : ['*'];
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: allowedOrigins.includes('*') ? true : allowedOrigins,
     credentials: true,
   })
 );
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+  res.status(200).json({ status: 'ok', service: 'unifix-api' });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Not Found' });
-});
+// Mount API v1 router
+app.use('/api/v1', router);
+
+// Error logging middleware
+app.use(errorLogger);
 
 // Error handling middleware
 export function errorHandler(
@@ -43,13 +46,18 @@ export function errorHandler(
   res: express.Response,
   next: express.NextFunction
 ) {
-  console.error(err);
+  logger.error('Unhandled API error', {
+    error: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+  });
   res.status(500).json({ error: 'Internal Server Error' });
 }
 
 app.use(errorHandler);
 
-// Export app for testing
-export { app };
+// 404 catch-all handler (placed last!)
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Endpoint Not Found' });
+});
 
-export default prisma;
+export { app };
