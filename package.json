@@ -11,7 +11,7 @@
     "packages/shared-config"
   ],
   "scripts": {
-    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/shared-schemas && npm run build --workspace=packages/shared-config && npm run build --workspace=services/api",
+    "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/shared-schemas && npm run build --workspace=packages/shared-config && npm run build --workspace=services/api && npm run build --workspace=apps/web",
     "dev": "npm run dev --workspace=services/api",
     "start": "npm run start --workspace=services/api",
     "seed": "ts-node prisma/seed.ts",
