@@ -4,10 +4,10 @@
     "slug": "unifix-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#ffffff",
+      "resizeMode": "contain"
     },
     "ios": {
       "supportsTablet": true,
@@ -17,8 +17,20 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
-      "package": "global.unifix.mobile"
+      "package": "global.unifix.mobile",
+      "versionCode": 1,
+      "permissions": [
+        "INTERNET",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
-    "scheme": "unifix"
+    "scheme": "unifix",
+    "extra": {
+      "eas": {
+        "projectId": "unifix-mobile"
+      }
+    }
   }
 }
