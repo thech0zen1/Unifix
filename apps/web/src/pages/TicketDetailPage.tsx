@@ -102,6 +102,19 @@ export const TicketDetailPage: React.FC<TicketDetailPageProps> = ({
     }
   };
 
+  if (!ticket && !isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+        <div className="card p-6 bg-white text-sm text-gray-600 max-w-md w-full text-center space-y-3">
+          <p className="text-red-600 font-medium">{actionError || 'Ticket could not be loaded.'}</p>
+          <button onClick={onClose} className="btn-secondary text-xs px-4 py-1.5">
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!ticket && isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">

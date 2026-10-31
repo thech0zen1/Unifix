@@ -1,5 +1,19 @@
 # Unifix Changelog
 
+## [0.5.1] - 2026-10-31 - UI Integration & Styling Fixes
+### Fixed
+- **Web Portal Styling & Tailwind CSS Pipeline (`apps/web`)**:
+  - Configured PostCSS and Tailwind CSS build integration (`tailwind.config.js`, `postcss.config.js`).
+  - Added `@tailwind base`, `components`, and `utilities` directives to `theme.css`.
+  - Resolved missing layout/flex/grid styles across all management screens.
+- **Ticket Detail Modal (`apps/web/src/pages/TicketDetailPage.tsx`)**:
+  - Added null guard state to prevent React runtime crash when a ticket fails to load.
+- **Queue Dynamic Filters (`apps/web/src/pages/TicketQueuePage.tsx`)**:
+  - Added dynamic filter synchronization hook so clicking dashboard metrics dynamically updates the active filter.
+- **Campus Fallback State (`apps/web/src/pages/LoginPage.tsx` & `apps/mobile/App.tsx`)**:
+  - Preloaded initial campus fixtures to ensure dropdowns and onboarding render cleanly.
+  - Added optional chaining safeguards in `AuthContext.tsx`.
+
 ## [0.5.0] - 2026-10-31 - Phase 9 & Phase 10 Complete
 ### Added
 - **Mobile Application (`apps/mobile`)**:

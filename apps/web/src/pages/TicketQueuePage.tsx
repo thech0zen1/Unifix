@@ -52,6 +52,23 @@ export const TicketQueuePage: React.FC<TicketQueuePageProps> = ({
   const [search, setSearch] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  useEffect(() => {
+    if (initialFilter === 'overdue') {
+      setIsOverdueOnly(true);
+      setIsCriticalOnly(false);
+      setStatusFilter('');
+    } else if (initialFilter === 'critical') {
+      setIsCriticalOnly(true);
+      setIsOverdueOnly(false);
+      setStatusFilter('');
+    } else if (initialFilter) {
+      setStatusFilter(initialFilter);
+      setIsOverdueOnly(false);
+      setIsCriticalOnly(false);
+    }
+    setPage(1);
+  }, [initialFilter]);
+
   const fetchTickets = async () => {
     if (!activeCampus) return;
     setIsLoading(true);

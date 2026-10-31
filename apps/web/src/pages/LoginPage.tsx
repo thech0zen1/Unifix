@@ -11,8 +11,13 @@ interface CampusOption {
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
-  const [campuses, setCampuses] = useState<CampusOption[]>([]);
-  const [selectedCampusId, setSelectedCampusId] = useState<string>('');
+  const [campuses, setCampuses] = useState<CampusOption[]>([
+    { id: 'campus-pstc-01', name: 'Pacific Science & Tech Campus', code: 'PSTC' },
+    { id: 'campus-madi-02', name: 'Metropolitan Arts & Design Institute', code: 'MADI' },
+    { id: 'campus-hvu-03', name: 'Highland Valley University', code: 'HVU' },
+  ]);
+  const [selectedCampusId, setSelectedCampusId] = useState<string>('campus-pstc-01');
+
   const [identifier, setIdentifier] = useState<string>('manager.sarah@pstc.test');
   const [step, setStep] = useState<'identifier' | 'otp'>('identifier');
   const [otpCode, setOtpCode] = useState<string>('123456');

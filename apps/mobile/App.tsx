@@ -21,8 +21,16 @@ export default function App() {
   // Session State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [campuses, setCampuses] = useState<any[]>([]);
-  const [selectedCampus, setSelectedCampus] = useState<any>(null);
+  const [campuses, setCampuses] = useState<any[]>([
+    { id: 'campus-pstc-01', name: 'Pacific Science & Tech Campus', code: 'PSTC' },
+    { id: 'campus-madi-02', name: 'Metropolitan Arts & Design Institute', code: 'MADI' },
+    { id: 'campus-hvu-03', name: 'Highland Valley University', code: 'HVU' },
+  ]);
+  const [selectedCampus, setSelectedCampus] = useState<any>({
+    id: 'campus-pstc-01',
+    name: 'Pacific Science & Tech Campus',
+    code: 'PSTC',
+  });
 
   // Auth Inputs
   const [identifier, setIdentifier] = useState<string>('student.alex@pstc.test');

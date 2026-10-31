@@ -81,9 +81,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         campuses: res.data.campuses,
       };
       setUser(userData);
-      const currentCampus = userData.campuses.find((c) => c.id === campusId) || userData.campuses[0];
+      const currentCampus = userData.campuses?.find((c) => c.id === campusId) || userData.campuses?.[0] || null;
       setActiveCampusState(currentCampus);
-      localStorage.setItem('unifix_active_campus_id', currentCampus.id);
+      if (currentCampus?.id) {
+        localStorage.setItem('unifix_active_campus_id', currentCampus.id);
+      }
     }
   };
 
