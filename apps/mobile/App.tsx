@@ -11,6 +11,9 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { MobileApiClient } from './src/api/mobileClient';
 
@@ -51,6 +54,16 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isDataLoading, setIsDataLoading] = useState<boolean>(false);
+
+  // Ticket Detail Modal State
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<any | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState<boolean>(false);
+  const [commentInput, setCommentInput] = useState<string>('');
+  const [isPostingComment, setIsPostingComment] = useState<boolean>(false);
+  const [isReopening, setIsReopening] = useState<boolean>(false);
+  const [reopenReason, setReopenReason] = useState<string>('');
+  const [isSubmittingReopen, setIsSubmittingReopen] = useState<boolean>(false);
 
   // 1. Initial Load: Fetch Campuses
   useEffect(() => {
@@ -204,9 +217,105 @@ export default function App() {
       await MobileApiClient.endorseTicket(ticketId);
       Alert.alert('Endorsed', 'You have been added as an affected user on this existing ticket.');
       loadTickets();
+      if (selectedTicket && selectedTicket.id === ticketId) {
+        openTicketDetails(ticketId);
+      }
     } catch (err: any) {
       Alert.alert('Notice', err.message || 'Already endorsed or unable to record.');
     }
+  };
+
+  // Open Ticket Details Modal
+  const openTicketDetails = async (ticketId: string) => {
+    setSelectedTicketId(ticketId);
+    setIsDetailLoading(true);
+    setIsReopening(false);
+    setReopenReason('');
+    setCommentInput('');
+    try {
+      const res: any = await MobileApiClient.getTicketDetails(ticketId);
+      if (res.data) {
+        setSelectedTicket(res.data);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to load ticket details');
+      setSelectedTicketId(null);
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
+
+  // Post Comment
+  const handlePostComment = async () => {
+    if (!commentInput.trim() || !selectedTicket) return;
+    setIsPostingComment(true);
+    try {
+      await MobileApiClient.addComment(selectedTicket.id, commentInput.trim());
+      setCommentInput('');
+      const res: any = await MobileApiClient.getTicketDetails(selectedTicket.id);
+      if (res.data) setSelectedTicket(res.data);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to post comment');
+    } finally {
+      setIsPostingComment(false);
+    }
+  };
+
+  // Reopen Ticket (Original Reporter Workflow)
+  const handleReopenTicket = async () => {
+    if (!reopenReason.trim() || reopenReason.trim().length < 10) {
+      Alert.alert('Reason Required', 'Please enter at least 10 characters explaining why the issue is not solved.');
+      return;
+    }
+    setIsSubmittingReopen(true);
+    try {
+      await MobileApiClient.reopenTicket(selectedTicket.id, reopenReason.trim());
+      Alert.alert('Ticket Reopened', 'Management has been notified and the stage timer has restarted.');
+      setIsReopening(false);
+      setReopenReason('');
+      openTicketDetails(selectedTicket.id);
+      loadTickets();
+    } catch (err: any) {
+      Alert.alert('Reopen Failed', err.message || 'Unable to reopen ticket');
+    } finally {
+      setIsSubmittingReopen(false);
+    }
+  };
+
+  // Notifications Handlers
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await MobileApiClient.markAllNotificationsRead();
+      loadNotifications();
+    } catch (err: any) {
+      console.error('Failed to mark all read', err);
+    }
+  };
+
+  const handleMarkNotificationRead = async (id: string) => {
+    try {
+      await MobileApiClient.markNotificationRead(id);
+      loadNotifications();
+    } catch (err: any) {
+      console.error('Failed to mark notification read', err);
+    }
+  };
+
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  // Calculate remaining days for stage countdown (21 days for standard, 2 days for critical)
+  const getStageCountdown = (ticket: any) => {
+    if (!ticket?.stageStartTime) return null;
+    const stageDurationDays = ticket.severity === 'CRITICAL' ? 2 : 21;
+    const startTime = new Date(ticket.stageStartTime).getTime();
+    const elapsedDays = Math.floor((Date.now() - startTime) / (1000 * 60 * 60 * 24));
+    const remainingDays = stageDurationDays - elapsedDays;
+    return {
+      stageDurationDays,
+      elapsedDays,
+      remainingDays: Math.max(0, remainingDays),
+      isOverdue: remainingDays <= 0,
+    };
   };
 
   // ==========================================
@@ -221,7 +330,7 @@ export default function App() {
             <Text style={styles.logoText}>U</Text>
           </View>
           <Text style={styles.appTitle}>Unifix Campus</Text>
-          <Text style={styles.appSubtitle}>Facility issues, safety reports, and quick resolution</Text>
+          <Text style={styles.appSubtitle}>Facility issues, safety reports, and rapid stage resolution</Text>
 
           <View style={styles.authCard}>
             {authStep === 'campus' ? (
@@ -347,9 +456,9 @@ export default function App() {
 
       {/* Main Content Body */}
       <View style={styles.mainContent}>
+        {/* TAB 1: Report Issue */}
         {activeTab === 'report' && (
           <ScrollView contentContainerStyle={styles.scrollContent}>
-            {/* Mode Switcher: AI-Assisted vs Manual */}
             <View style={styles.modeTabs}>
               <TouchableOpacity
                 onPress={() => setReportingMode('ai')}
@@ -557,20 +666,33 @@ export default function App() {
           </ScrollView>
         )}
 
-        {/* Browse Campus Issues */}
+        {/* TAB 2: Browse Campus Issues */}
         {activeTab === 'browse' && (
           <ScrollView contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.sectionHeader}>Campus Issues Feed ({campusTickets.length})</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeader}>Campus Issues Feed ({campusTickets.length})</Text>
+              <TouchableOpacity onPress={loadTickets} style={styles.refreshBtn}>
+                <Text style={styles.refreshBtnText}>↻ Refresh</Text>
+              </TouchableOpacity>
+            </View>
+
             {isDataLoading ? (
               <ActivityIndicator style={{ marginTop: 24 }} color="#0071e3" />
             ) : campusTickets.length === 0 ? (
               <Text style={styles.emptyText}>No tickets reported yet on this campus.</Text>
             ) : (
               campusTickets.map((t) => (
-                <View key={t.id} style={styles.ticketCard}>
+                <TouchableOpacity
+                  key={t.id}
+                  activeOpacity={0.8}
+                  onPress={() => openTicketDetails(t.id)}
+                  style={styles.ticketCard}
+                >
                   <View style={styles.ticketCardHeader}>
                     <Text style={styles.ticketCategory}>{t.category?.name || 'General'}</Text>
-                    <Text style={styles.ticketStatus}>{t.status}</Text>
+                    <View style={styles.statusPillBadge}>
+                      <Text style={styles.ticketStatus}>{t.status}</Text>
+                    </View>
                   </View>
                   <Text style={styles.ticketTitle}>{t.title}</Text>
                   <Text style={styles.ticketDesc} numberOfLines={2}>
@@ -587,58 +709,295 @@ export default function App() {
                       </Text>
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </ScrollView>
         )}
 
-        {/* My Reported Tickets & Tracking */}
+        {/* TAB 3: My Reported Tickets & Tracking */}
         {activeTab === 'myTickets' && (
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <Text style={styles.sectionHeader}>My Reported Issues & 3-Week Stage Tracking</Text>
-            {campusTickets
-              .filter((t) => t.reporterId === currentUser?.id)
-              .map((t) => (
-                <View key={t.id} style={styles.ticketCard}>
-                  <View style={styles.ticketCardHeader}>
-                    <Text style={styles.stageBadge}>Stage: {t.currentStage}</Text>
-                    <Text style={styles.ticketStatus}>{t.status}</Text>
-                  </View>
-                  <Text style={styles.ticketTitle}>{t.title}</Text>
-                  <Text style={styles.trackingInfo}>
-                    In current stage since {new Date(t.stageStartTime).toLocaleDateString()}
-                  </Text>
-                  {t.resolvedAt && (
-                    <Text style={styles.resolutionNotice}>
-                      Resolved: {t.resolutionSummary}
-                    </Text>
-                  )}
-                </View>
-              ))}
+            {campusTickets.filter((t) => t.reporterId === currentUser?.id).length === 0 ? (
+              <Text style={styles.emptyText}>You haven't submitted any issues yet.</Text>
+            ) : (
+              campusTickets
+                .filter((t) => t.reporterId === currentUser?.id)
+                .map((t) => {
+                  const countdown = getStageCountdown(t);
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      activeOpacity={0.8}
+                      onPress={() => openTicketDetails(t.id)}
+                      style={styles.ticketCard}
+                    >
+                      <View style={styles.ticketCardHeader}>
+                        <Text style={styles.stageBadge}>Stage: {t.currentStage}</Text>
+                        <View style={styles.statusPillBadge}>
+                          <Text style={styles.ticketStatus}>{t.status}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.ticketTitle}>{t.title}</Text>
+                      {countdown && (
+                        <View style={styles.countdownBanner}>
+                          <Text style={styles.countdownText}>
+                            {countdown.isOverdue
+                              ? `⚠️ Overdue for stage progression (${countdown.elapsedDays}d in stage)`
+                              : `⏱️ ${countdown.remainingDays} days remaining in 21-day stage window`}
+                          </Text>
+                        </View>
+                      )}
+                      {t.resolvedAt && (
+                        <Text style={styles.resolutionNotice}>
+                          ✓ Resolved: {t.resolutionSummary || 'Resolution complete'}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+            )}
           </ScrollView>
         )}
 
-        {/* In-App Notifications */}
+        {/* TAB 4: In-App Notifications & Alerts */}
         {activeTab === 'notifications' && (
           <ScrollView contentContainerStyle={styles.scrollContent}>
-            <Text style={styles.sectionHeader}>Notifications & Escalation Alerts</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionHeader}>Alerts & Notifications</Text>
+              {notifications.length > 0 && (
+                <TouchableOpacity onPress={handleMarkAllNotificationsRead} style={styles.refreshBtn}>
+                  <Text style={styles.refreshBtnText}>Mark all read</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             {notifications.length === 0 ? (
               <Text style={styles.emptyText}>No notifications right now.</Text>
             ) : (
               notifications.map((n) => (
-                <View key={n.id} style={styles.notifCard}>
-                  <Text style={styles.notifTitle}>{n.title}</Text>
+                <TouchableOpacity
+                  key={n.id}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    handleMarkNotificationRead(n.id);
+                    if (n.ticketId) openTicketDetails(n.ticketId);
+                  }}
+                  style={[styles.notifCard, !n.isRead && styles.notifCardUnread]}
+                >
+                  <View style={styles.notifHeaderRow}>
+                    <Text style={styles.notifTitle}>{n.title}</Text>
+                    {!n.isRead && <View style={styles.unreadDot} />}
+                  </View>
                   <Text style={styles.notifBody}>{n.message}</Text>
                   <Text style={styles.notifTime}>
                     {new Date(n.createdAt).toLocaleDateString()}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </ScrollView>
         )}
       </View>
+
+      {/* TICKET DETAIL & REOPEN MODAL */}
+      <Modal
+        visible={Boolean(selectedTicketId)}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedTicketId(null)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalHeaderTitle}>Ticket Details</Text>
+              <TouchableOpacity
+                onPress={() => setSelectedTicketId(null)}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isDetailLoading || !selectedTicket ? (
+              <ActivityIndicator style={{ marginTop: 40 }} color="#0071e3" />
+            ) : (
+              <ScrollView contentContainerStyle={styles.modalContent}>
+                {/* Status Badges */}
+                <View style={styles.badgeRow}>
+                  <View style={styles.statusPillBadge}>
+                    <Text style={styles.ticketStatus}>{selectedTicket.status}</Text>
+                  </View>
+                  <View style={[styles.statusPillBadge, { backgroundColor: '#f0fdf4' }]}>
+                    <Text style={[styles.ticketStatus, { color: '#166534' }]}>
+                      {selectedTicket.severity}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusPillBadge, { backgroundColor: '#fdf4ff' }]}>
+                    <Text style={[styles.ticketStatus, { color: '#86198f' }]}>
+                      Stage: {selectedTicket.currentStage}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Title & Description */}
+                <Text style={styles.detailTitle}>{selectedTicket.title}</Text>
+                <Text style={styles.detailDesc}>{selectedTicket.description}</Text>
+
+                {/* Metadata Details Card */}
+                <View style={styles.metaCard}>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaLabel}>Category:</Text>
+                    <Text style={styles.metaValue}>{selectedTicket.category?.name || 'General'}</Text>
+                  </View>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaLabel}>Location:</Text>
+                    <Text style={styles.metaValue}>
+                      {selectedTicket.location?.name || selectedTicket.locationText || 'Campus'}
+                    </Text>
+                  </View>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaLabel}>Reported By:</Text>
+                    <Text style={styles.metaValue}>
+                      {selectedTicket.isAnonymous
+                        ? '🛡️ Anonymous Reporter'
+                        : `${selectedTicket.reporter?.firstName || 'Campus'} ${selectedTicket.reporter?.lastName || 'Reporter'}`}
+                    </Text>
+                  </View>
+                  <View style={styles.metaRow}>
+                    <Text style={styles.metaLabel}>Endorsements:</Text>
+                    <Text style={styles.metaValue}>
+                      {selectedTicket._count?.endorsements || selectedTicket.endorsements?.length || 0} affected users
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 21-Day Stage Countdown Banner */}
+                {selectedTicket.stageStartTime && (
+                  <View style={styles.stageCountdownCard}>
+                    <Text style={styles.stageCountdownTitle}>3-Week Stage Escalation Tracker</Text>
+                    <Text style={styles.stageCountdownSub}>
+                      Timer started on {new Date(selectedTicket.stageStartTime).toLocaleDateString()}
+                    </Text>
+                    <Text style={styles.stageCountdownAlert}>
+                      {getStageCountdown(selectedTicket)?.isOverdue
+                        ? '⚠️ Overdue: Stage unchanged past the 21-day threshold. Management alerted.'
+                        : `⏱️ Next automatic management escalation in ${getStageCountdown(selectedTicket)?.remainingDays} days if not progressed.`}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Endorsement Action */}
+                <TouchableOpacity
+                  onPress={() => handleEndorse(selectedTicket.id)}
+                  style={styles.endorseActionBtn}
+                >
+                  <Text style={styles.endorseActionText}>
+                    👍 I have this issue too ({selectedTicket._count?.endorsements || selectedTicket.endorsements?.length || 0})
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Resolution Summary & Reopen Workflow */}
+                {selectedTicket.status === 'RESOLVED' && (
+                  <View style={styles.resolutionBox}>
+                    <Text style={styles.resolutionTitle}>✓ Marked as Resolved</Text>
+                    <Text style={styles.resolutionDetails}>
+                      {selectedTicket.resolutionSummary || 'Management completed maintenance.'}
+                    </Text>
+
+                    {/* Original Reporter Reopen Action */}
+                    {selectedTicket.reporterId === currentUser?.id && (
+                      <View style={{ marginTop: 12 }}>
+                        {!isReopening ? (
+                          <TouchableOpacity
+                            onPress={() => setIsReopening(true)}
+                            style={styles.reopenPromptBtn}
+                          >
+                            <Text style={styles.reopenPromptText}>Issue still not fixed? Reopen Ticket</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={styles.reopenFormBox}>
+                            <Text style={styles.reopenFormHeading}>Explain why issue is still unresolved:</Text>
+                            <TextInput
+                              style={[styles.input, styles.textArea, { backgroundColor: '#ffffff' }]}
+                              multiline
+                              numberOfLines={3}
+                              value={reopenReason}
+                              onChangeText={setReopenReason}
+                              placeholder="Describe why the problem remains (min 10 characters)..."
+                            />
+                            <View style={styles.reopenButtonsRow}>
+                              <TouchableOpacity
+                                onPress={() => setIsReopening(false)}
+                                style={styles.cancelBtn}
+                              >
+                                <Text style={styles.cancelBtnText}>Cancel</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={handleReopenTicket}
+                                disabled={isSubmittingReopen}
+                                style={styles.confirmReopenBtn}
+                              >
+                                {isSubmittingReopen ? (
+                                  <ActivityIndicator color="#fff" />
+                                ) : (
+                                  <Text style={styles.confirmReopenText}>Confirm Reopen</Text>
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* Comments Section */}
+                <View style={styles.commentsSection}>
+                  <Text style={styles.commentsHeading}>
+                    Comments ({selectedTicket.comments?.length || 0})
+                  </Text>
+                  {selectedTicket.comments?.map((c: any) => (
+                    <View key={c.id} style={styles.commentItem}>
+                      <View style={styles.commentHeader}>
+                        <Text style={styles.commentAuthor}>{c.authorName || 'Campus Member'}</Text>
+                        <Text style={styles.commentDate}>
+                          {new Date(c.createdAt).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <Text style={styles.commentContent}>{c.content}</Text>
+                    </View>
+                  ))}
+
+                  <View style={styles.addCommentBox}>
+                    <TextInput
+                      style={[styles.input, styles.commentInput]}
+                      placeholder="Add a public comment or update..."
+                      value={commentInput}
+                      onChangeText={setCommentInput}
+                    />
+                    <TouchableOpacity
+                      onPress={handlePostComment}
+                      disabled={isPostingComment || !commentInput.trim()}
+                      style={styles.postCommentBtn}
+                    >
+                      {isPostingComment ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.postCommentBtnText}>Post</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
 
       {/* Bottom Tab Bar */}
       <View style={styles.tabBar}>
@@ -647,7 +1006,7 @@ export default function App() {
           style={styles.tabItem}
         >
           <Text style={[styles.tabText, activeTab === 'report' && styles.tabTextActive]}>
-            Report Issue
+            Report
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -670,9 +1029,12 @@ export default function App() {
           onPress={() => setActiveTab('notifications')}
           style={styles.tabItem}
         >
-          <Text style={[styles.tabText, activeTab === 'notifications' && styles.tabTextActive]}>
-            Alerts
-          </Text>
+          <View>
+            <Text style={[styles.tabText, activeTab === 'notifications' && styles.tabTextActive]}>
+              Alerts
+            </Text>
+            {unreadCount > 0 && <View style={styles.badgeIndicator} />}
+          </View>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -750,7 +1112,7 @@ const styles = StyleSheet.create({
   // Header
   header: {
     flexDirection: 'row',
-    justifyContent: 'between',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -766,6 +1128,10 @@ const styles = StyleSheet.create({
   // Main Body
   mainContent: { flex: 1 },
   scrollContent: { padding: 16, paddingBottom: 40 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionHeader: { fontSize: 16, fontWeight: '700', color: '#1d1d1f' },
+  refreshBtn: { padding: 4 },
+  refreshBtnText: { color: '#0071e3', fontSize: 12, fontWeight: '600' },
   modeTabs: { flexDirection: 'row', backgroundColor: '#e5e5ea', borderRadius: 10, padding: 2, marginBottom: 14 },
   modeTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   modeTabActive: { backgroundColor: '#ffffff' },
@@ -803,11 +1169,11 @@ const styles = StyleSheet.create({
   severityPillTextActive: { color: '#ffffff' },
 
   // Ticket card
-  sectionHeader: { fontSize: 16, fontWeight: '700', color: '#1d1d1f', marginBottom: 12 },
   ticketCard: { backgroundColor: '#ffffff', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e5e5ea' },
   ticketCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   ticketCategory: { fontSize: 11, fontWeight: '600', color: '#0071e3' },
-  ticketStatus: { fontSize: 11, fontWeight: '700', color: '#86868b' },
+  ticketStatus: { fontSize: 10, fontWeight: '700', color: '#6e6e73' },
+  statusPillBadge: { backgroundColor: '#f5f5f7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   ticketTitle: { fontSize: 14, fontWeight: '600', color: '#1d1d1f', marginTop: 4 },
   ticketDesc: { fontSize: 12, color: '#6e6e73', marginTop: 4 },
   ticketFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderColor: '#f5f5f7' },
@@ -815,13 +1181,17 @@ const styles = StyleSheet.create({
   smallEndorseBtn: { backgroundColor: '#f5f5f7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   smallEndorseText: { fontSize: 11, fontWeight: '600', color: '#1d1d1f' },
   stageBadge: { fontSize: 11, fontWeight: '700', color: '#af52de' },
-  trackingInfo: { fontSize: 11, color: '#86868b', marginTop: 6 },
-  resolutionNotice: { fontSize: 11, fontWeight: '600', color: '#34c759', marginTop: 4 },
+  countdownBanner: { backgroundColor: '#f5f5f7', padding: 8, borderRadius: 6, marginTop: 8 },
+  countdownText: { fontSize: 11, fontWeight: '500', color: '#1d1d1f' },
+  resolutionNotice: { fontSize: 11, fontWeight: '600', color: '#34c759', marginTop: 6 },
   emptyText: { textAlign: 'center', color: '#86868b', fontSize: 13, marginTop: 40 },
 
   // Notifications
   notifCard: { backgroundColor: '#ffffff', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e5e5ea' },
+  notifCardUnread: { backgroundColor: '#f0f7ff', borderColor: '#bfe0ff' },
+  notifHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   notifTitle: { fontSize: 13, fontWeight: '700', color: '#1d1d1f' },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0071e3' },
   notifBody: { fontSize: 12, color: '#6e6e73', marginTop: 2 },
   notifTime: { fontSize: 10, color: '#86868b', marginTop: 6 },
 
@@ -837,4 +1207,118 @@ const styles = StyleSheet.create({
   tabItem: { flex: 1, alignItems: 'center' },
   tabText: { fontSize: 11, fontWeight: '500', color: '#86868b' },
   tabTextActive: { color: '#0071e3', fontWeight: '700' },
+  badgeIndicator: {
+    position: 'absolute',
+    top: -2,
+    right: -6,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ff3b30',
+  },
+
+  // Modal Styles
+  modalContainer: { flex: 1, backgroundColor: '#ffffff' },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderColor: '#e5e5ea',
+  },
+  modalHeaderTitle: { fontSize: 16, fontWeight: '700', color: '#1d1d1f' },
+  closeBtn: { padding: 4 },
+  closeBtnText: { color: '#0071e3', fontSize: 14, fontWeight: '600' },
+  modalContent: { padding: 20, paddingBottom: 40 },
+  badgeRow: { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  detailTitle: { fontSize: 18, fontWeight: '700', color: '#1d1d1f', marginBottom: 8 },
+  detailDesc: { fontSize: 14, color: '#424245', lineHeight: 20, marginBottom: 16 },
+  metaCard: {
+    backgroundColor: '#f5f5f7',
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    marginBottom: 16,
+  },
+  metaRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  metaLabel: { fontSize: 12, color: '#86868b', fontWeight: '500' },
+  metaValue: { fontSize: 12, color: '#1d1d1f', fontWeight: '600' },
+  stageCountdownCard: {
+    backgroundColor: '#fbfbfd',
+    borderWidth: 1,
+    borderColor: '#e5e5ea',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  stageCountdownTitle: { fontSize: 13, fontWeight: '700', color: '#af52de' },
+  stageCountdownSub: { fontSize: 11, color: '#86868b', marginTop: 2 },
+  stageCountdownAlert: { fontSize: 12, fontWeight: '500', color: '#1d1d1f', marginTop: 6 },
+  endorseActionBtn: {
+    backgroundColor: '#eaf3ff',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  endorseActionText: { color: '#0071e3', fontWeight: '600', fontSize: 13 },
+
+  // Resolution & Reopen
+  resolutionBox: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  resolutionTitle: { fontSize: 14, fontWeight: '700', color: '#166534' },
+  resolutionDetails: { fontSize: 12, color: '#15803d', marginTop: 4 },
+  reopenPromptBtn: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ff9500',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  reopenPromptText: { color: '#ff9500', fontWeight: '600', fontSize: 12 },
+  reopenFormBox: { marginTop: 8 },
+  reopenFormHeading: { fontSize: 12, fontWeight: '600', color: '#1d1d1f', marginBottom: 4 },
+  reopenButtonsRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 8 },
+  cancelBtn: { padding: 8 },
+  cancelBtnText: { color: '#86868b', fontSize: 12, fontWeight: '500' },
+  confirmReopenBtn: {
+    backgroundColor: '#ff9500',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  confirmReopenText: { color: '#ffffff', fontSize: 12, fontWeight: '600' },
+
+  // Comments
+  commentsSection: { marginTop: 12, borderTopWidth: 1, borderColor: '#e5e5ea', paddingTop: 16 },
+  commentsHeading: { fontSize: 15, fontWeight: '700', color: '#1d1d1f', marginBottom: 12 },
+  commentItem: {
+    backgroundColor: '#f5f5f7',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+  },
+  commentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  commentAuthor: { fontSize: 12, fontWeight: '600', color: '#1d1d1f' },
+  commentDate: { fontSize: 10, color: '#86868b' },
+  commentContent: { fontSize: 13, color: '#333336' },
+  addCommentBox: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  commentInput: { flex: 1, marginTop: 0 },
+  postCommentBtn: {
+    backgroundColor: '#0071e3',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  postCommentBtnText: { color: '#ffffff', fontWeight: '600', fontSize: 13 },
 });

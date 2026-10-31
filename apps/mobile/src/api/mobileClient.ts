@@ -98,6 +98,20 @@ export const MobileApiClient = {
     });
   },
 
+  async addComment(ticketId: string, content: string) {
+    return this.request(`/tickets/${ticketId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  },
+
+  async reopenTicket(ticketId: string, reason: string) {
+    return this.request(`/tickets/${ticketId}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
   // AI Assistance
   async parseIssueWithAI(campusId: string, text: string) {
     return this.request('/ai/parse', {
@@ -116,5 +130,17 @@ export const MobileApiClient = {
   // Notifications
   async getNotifications() {
     return this.request('/notifications');
+  },
+
+  async markNotificationRead(id: string) {
+    return this.request(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    });
+  },
+
+  async markAllNotificationsRead() {
+    return this.request('/notifications/read-all', {
+      method: 'POST',
+    });
   },
 };

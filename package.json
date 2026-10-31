@@ -12,10 +12,13 @@
   ],
   "scripts": {
     "build": "npm run build --workspace=packages/shared-types && npm run build --workspace=packages/shared-schemas && npm run build --workspace=packages/shared-config && npm run build --workspace=services/api && npm run build --workspace=apps/web",
+    "typecheck": "npm run typecheck --workspace=apps/mobile && npm run typecheck --workspace=apps/web",
     "dev": "npm run dev --workspace=services/api",
     "start": "npm run start --workspace=services/api",
     "seed": "ts-node prisma/seed.ts",
-    "test:smoke": "ts-node services/api/src/smokeTest.ts"
+    "test:smoke": "ts-node services/api/src/smokeTest.ts",
+    "test:integration": "ts-node services/api/src/integrationVerification.ts",
+    "test": "npm run test:smoke && npm run test:integration"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

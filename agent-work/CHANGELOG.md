@@ -1,5 +1,27 @@
 # Unifix Changelog
 
+## [0.5.0] - 2026-10-31 - Phase 9 & Phase 10 Complete
+### Added
+- **Mobile Application (`apps/mobile`)**:
+  - React Native / Expo application with complete TypeScript compilation.
+  - Onboarding with campus selection and simulated OTP authentication.
+  - AI-assisted issue description analyzer with similarity duplicate matching.
+  - Manual issue reporting form with severity, location, and anonymous toggles.
+  - Full Ticket Detail Modal with 21-day stage countdown tracking and elapsed time display.
+  - Comments timeline with author details and real-time public comment posting.
+  - Reporter reopen workflow allowing the original reporter to reopen a resolved ticket with mandatory reason.
+  - In-app notification center with unread badge counter.
+  - Entry point `apps/mobile/index.js` registering Expo root component.
+- **Comprehensive Multi-Tenant & Security Verification Suite (`services/api/src/integrationVerification.ts`)**:
+  - Validates strict 403 Forbidden cross-campus isolation on ticket creation and queries.
+  - Validates field-level privacy serialization: third-party ordinary users see sanitized "Anonymous Reporter" with phone and email scrubbed; authorized management sees true reporter details.
+  - Validates endorsement deduplication (preventing vote inflation).
+  - Validates ticket resolution with mandatory summary (>= 10 chars).
+  - Validates reporter-only reopen authorization (blocking unauthorized third parties from reopening tickets).
+  - Validates in-app notification center list and read-all operations.
+- **Root Scripts**: Added `npm run typecheck`, `npm run test:integration`, and unified `npm test`.
+- **Documentation**: Added comprehensive architecture specification in `docs/architecture.md`.
+
 ## [0.4.0] - 2026-10-31 - Phase 2 to Phase 6 Complete
 ### Added
 - **Complete Relational Prisma Schema**: 13 models synchronized to Supabase PostgreSQL (Campus, CampusAuthorizedIdentity, Department, Building, Location, Category, User, CampusMembership, RefreshSession, Ticket, TicketAssignment, Comment, Attachment, Endorsement, StatusHistory, PriorityHistory, TicketProgressEvent, EscalationEvent, Notification, AuditLog, AIAnalysis).
