@@ -1,9 +1,13 @@
 // Mobile API Client - Unifix React Native
 import { Platform } from 'react-native';
 
-// In Android emulator, 10.0.2.2 maps to host machine's localhost; otherwise localhost
-const DEFAULT_HOST = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
-let API_BASE_URL = `${DEFAULT_HOST}/api/v1`;
+const DEFAULT_HOST = Platform.OS === 'android'
+  ? 'http://10.0.2.2:3000'
+  : 'http://localhost:3000';
+
+const API_HOST = process.env.EXPO_PUBLIC_API_URL || DEFAULT_HOST;
+
+let API_BASE_URL = `${API_HOST.replace(/\/+$/, '')}/api/v1`;
 
 let authToken: string | null = null;
 let refreshTokenStr: string | null = null;
