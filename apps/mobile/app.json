@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "Unifix",
@@ -29,15 +30,10 @@
     "scheme": "unifix",
     "extra": {
       "eas": {
-<<<<<<< HEAD
-        "projectId": "unifix-mobile"
-      }
-    }
-=======
         "projectId": "6aa71dcf-17d6-4e38-a131-5bf9f19736c4"
       }
     },
     "owner": "prjzwl"
->>>>>>> ced00e3 (EAS setup)
   }
 }
+
