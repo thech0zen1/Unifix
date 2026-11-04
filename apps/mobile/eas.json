@@ -1,6 +1,11 @@
 {
   "cli": {
+<<<<<<< HEAD
     "version": ">= 10.0.0"
+=======
+    "version": ">= 27.4.1",
+    "appVersionSource": "remote"
+>>>>>>> ced00e3 (EAS setup)
   },
   "build": {
     "development": {
@@ -8,6 +13,7 @@
       "distribution": "internal"
     },
     "preview": {
+<<<<<<< HEAD
       "distribution": "internal",
       "android": {
         "buildType": "apk"
@@ -17,6 +23,12 @@
       "android": {
         "buildType": "app-bundle"
       }
+=======
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true
+>>>>>>> ced00e3 (EAS setup)
     }
   },
   "submit": {
